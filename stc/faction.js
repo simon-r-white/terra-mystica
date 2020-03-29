@@ -19,7 +19,7 @@ function parseParamsFromPathname (pathname) {
 function loadGame (domain, pathname) {
     if (document.location.hash &&
         document.location.hash.match(/^#\/faction/)) {
-        document.location = "http://" + domain + document.location.hash.sub(/^#/, '');
+        document.location = "https://" + domain + document.location.hash.sub(/^#/, '');
     }
 
     parseParamsFromPathname(pathname);
@@ -57,7 +57,7 @@ function previewOrSave(save, preview_data, prefix_data, status_message) {
     }
 
     var target = save ? "/app/append-game/" : "/app/view-game/";
-    target = "http://" + backendDomain + target;
+    target = "https://" + backendDomain + target;
     if (!save) {
         spin();
     }
@@ -104,14 +104,17 @@ function previewOrSave(save, preview_data, prefix_data, status_message) {
                         document.location.hash = state.new_faction_key;
                         currentFaction = TM.params.faction;
                     }
+                    preview(false);
                     fetchGames($("user-info"), "user", "running",
                                showActiveGames);
-                    preview(false);
                 }
             } else {
                 try {
                     draw();
                     moveEntryAfterPreview();
+                    if (preview_data) {
+                        clearNextGameNotification();
+                    }
                 } catch (e) {
                     handleException(e);
                 };
@@ -137,13 +140,16 @@ function save() {
 }
 
 function showActiveGames(games, div, mode, status) {
-    var record = { "active_count": 0, "action_required_count": 0 };
+    var record = { "active_count": 0, "action_required_count": 0,
+                   "waiting_for": 0};
     moveRequired = false;
     games.each(function(elem) {
         if (!elem.finished) { record.active_count++; }
         if (elem.action_required) {
             moveRequired = true;
             record.action_required_count++;
+            record.waiting_for = Math.max(elem.seconds_since_update,
+                                          record.waiting_for)
         }
     });
     $(div).innerHTML = "<div style='display: block-inline; margin-right: 10px'>Moves required in #{action_required_count}/#{active_count} games</div>".interpolate(record);
@@ -152,10 +158,23 @@ function showActiveGames(games, div, mode, status) {
     link.onclick = function() { fetchGames(div, mode, "running", nextGame); } 
     $(div).insert(link);
 
+    record.waiting_for = seconds_to_pretty_time(record.waiting_for, "hour");
+    
+    $("next_game").innerHTML = "";
+    if (record.action_required_count > 0) {
+        if (record.action_required_count > 1) {
+            record.s = "s";
+        }
+        $("next_game").insert(new Element("div").updateText(
+            "It's your turn to move in #{action_required_count} game#{s}. Last move #{waiting_for} ago.".interpolate(record)));
+        var button = new Element("button").updateText("Go to game");
+        button.onclick = link.onclick;
+        $("next_game").insert(button);
+    }
     setTitle();
 }
 
-function nextGame(games, div, mode, status) {
+function findNextGame(games) {
     var active_games = games.filter(function (elem) {
         return elem.action_required;
     });
@@ -176,6 +195,12 @@ function nextGame(games, div, mode, status) {
         game = elem;
     }
 
+    return game;
+}
+
+function nextGame(games, div, mode, status) {
+    var game = findNextGame(games);
+
     if (game) {
         document.location = game.link;
     }
@@ -187,7 +212,7 @@ function loadOrSavePlan(save) {
     dataEntrySetStatus(true);
 
     var target = "/app/plan/";
-    target = "http://" + backendDomain + target;
+    target = "https://" + backendDomain + target;
 
     var form_params = {
         "cache-token": new Date() - Math.random(),
@@ -236,7 +261,7 @@ function loadOrSendChat(send) {
     dataEntrySetStatus(true);
 
     var target = "/app/chat/";
-    target = "http://" + backendDomain + target;
+    target = "https://" + backendDomain + target;
 
     var form_params = {
         "cache-token": new Date() - Math.random(),

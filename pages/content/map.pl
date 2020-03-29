@@ -16,9 +16,11 @@ __DATA__
 
 <h4>Map</h4>
 <div id="map-container">
-  <canvas id="map" width="800" height="500" style="display: none">
+  <canvas id="map" width="1600" height="1000" style="display: none">
     Browser not supported.
   </canvas>
 </div>
+
+<table id="faction-vp" class="gamelist"></table>
 
 <script>showMap();</script>

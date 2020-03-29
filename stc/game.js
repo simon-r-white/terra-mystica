@@ -284,7 +284,14 @@ function drawHex(ctx, elem) {
     makeMapHexPath(ctx, hex);
 
     ctx.save();
-    ctx.fillStyle = bgcolors[hex.color];
+    var contrast;
+    if (hex.forceColor) {
+        ctx.fillStyle = hex.forceColor;
+        contrast = '#000';
+    } else {
+        ctx.fillStyle = bgcolors[hex.color];
+        contrast = contrastColor[hex.color];
+    }
     ctx.fill();
     ctx.restore();
 
@@ -305,10 +312,16 @@ function drawHex(ctx, elem) {
         drawStronghold(ctx, hex);
     } else if (hex.building == 'SA') {
         drawSanctuary(ctx, hex);
+    } else if (hex.label) {
+        ctx.save();
+        ctx.strokeStyle = contrast;
+        ctx.textAlign = 'center';
+        drawText(ctx, hex.label, loc[0], loc[1], "12px Verdana");
+        ctx.restore();
     }
 
     ctx.save();
-    ctx.strokeStyle = contrastColor[hex.color];
+    ctx.strokeStyle = contrast;
     ctx.textAlign = 'center';
     drawText(ctx, id, loc[0], loc[1] + 25,
              hex.town ? "bold 12px Verdana" : "12px Verdana");
@@ -367,6 +380,7 @@ function drawMap() {
     if (canvas.getContext) {
         canvas.width = canvas.width;
         var ctx = canvas.getContext("2d");
+        ctx.scale(2, 2);
 
         ctx.save();
         state.bridges.each(function(bridge, index) {
@@ -425,6 +439,9 @@ function drawCults() {
 
         var width = cult_width;
         var height = 500;
+
+        ctx.save();
+        ctx.scale(2, 2);        
 
         for (var j = 0; j < 4; ++j) {
             var cult = cults[j];
@@ -499,7 +516,6 @@ function drawCults() {
             ctx.restore();
         };
 
-        ctx.save();
         ctx.beginPath();
         ctx.strokeStyle = "#000";
         ctx.lineWidth = 1;
@@ -543,6 +559,7 @@ function drawActiveCultBorder(cult) {
         ctx.beginPath();
 
         ctx.save();
+        ctx.scale(2, 2);
         ctx.strokeStyle = "#000";
         ctx.lineWidth = 4;
         path();
@@ -550,6 +567,7 @@ function drawActiveCultBorder(cult) {
         ctx.restore();
 
         ctx.save();
+        ctx.scale(2, 2);
         ctx.strokeStyle = colors.activeUI;
         ctx.lineWidth = 3;
         path();
@@ -621,6 +639,7 @@ function renderAction(canvas, name, key, border_color) {
     var ctx = canvas.getContext("2d");
 
     ctx.save();
+    ctx.scale(2, 2);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.translate(2, 2);
 
@@ -776,7 +795,7 @@ function cultClass(name) {
 
 function insertAction(parent, name, key) {
     var container = new Element('canvas', {
-        'id': 'action/' + key, 'class': 'action', 'width': 50, 'height': 85});
+        'id': 'action/' + key, 'class': 'action', 'width': 100, 'height': 170});
     parent.insert(container);
     var canvas = parent.childElements().last();
     renderAction(canvas, name, key, '#000');
@@ -951,9 +970,11 @@ function makeBoard(color, title, info_link, klass, style) {
     });
     heading.insert(title);
     if (info_link) {
-        heading.insert(new Element('a', { href: info_link,
-                                          target: '_blank',
-                                          style: 'float: right; color: ' + fgcolor }).updateText('[info]'));
+        var elem = new Element('a', { href: info_link,
+                                      target: '_blank',
+                                      style: 'float: right; color: ' + fgcolor }
+                              ).updateText('[info]')
+        heading.insert(elem);
     }
     board.insert(heading);
 
@@ -967,7 +988,7 @@ function renderColorCycle(faction, parent) {
     var secondaryColor = faction.secondary_color;
 
     parent.insert(new Element('canvas', {
-        'class': 'colorcycle', 'width': 90, 'height': 80}));
+        'class': 'colorcycle', 'width': 180, 'height': 160}));
     var canvas = parent.childElements().last();
     var startColor = secondaryColor || primaryColor;
 
@@ -978,6 +999,7 @@ function renderColorCycle(faction, parent) {
     var ctx = canvas.getContext("2d");
 
     ctx.save()
+    ctx.scale(2, 2);
     ctx.translate(40, 41);
 
     var base = cycle.indexOf(startColor);
@@ -1157,7 +1179,7 @@ function drawFaction(name) {
     var container = new Element('div', { 'class': 'faction-board' });
     var info_link = '';
     if (faction.faction_board_id) {
-        info_link = 'http://www.terra-mystica-spiel.de/en/voelker.php?show=' + faction.faction_board_id;
+        info_link = 'http://terra.snellman.net/stc/boards/' + faction.name + '.jpg';
     } else {
         info_link = '/factioninfo/#' + faction.name;
     }
@@ -1707,6 +1729,20 @@ function addCultClickHandler(title, cult, funs) {
     drawActiveCultBorder(cult);
 }
 
+function currentPlayerShouldMove() {
+    var ret = false;
+    if (currentFaction) {
+        state.action_required.each(function(record, index) {
+            if (record.faction == currentFaction ||
+                record.player_index == currentFaction) {
+                ret = true;
+            }
+        });
+    }
+
+    return ret;
+}
+
 function drawActionRequired() {
     var parent = $("action_required");
 
@@ -2245,7 +2281,11 @@ function addFactionInput(parent, record, index) {
                     if (!state.available_factions[faction]) {
                         return;
                     }
-                    var button = new Element("button").updateText(faction);
+                    var label = factionPrettyName[faction];
+                    if (state.vp_setup && state.vp_setup[faction]) {
+                        label += " [" + state.vp_setup[faction] + " vp]";
+                    }
+                    var button = new Element("button").updateText(label);
                     button.onclick = function() {
                         appendCommand("setup " + faction + "\n");
                     };
@@ -2261,6 +2301,12 @@ function addFactionInput(parent, record, index) {
 
             cell.insert(new Element("br"));
         });
+        var resign = new Element("button").updateText("Resign");
+        resign.onclick = function() {
+            appendCommand("resign\n");
+        };
+        cell1.insert(new Element("hr"));
+        cell1.insert(resign);
         parent.insert(div);
     }
     if (record.type == "pick-color") {
@@ -2623,6 +2669,12 @@ function addUndoToMovePicker(picker, faction) {
         if (state.action_required[0] &&
             state.action_required[0].faction != faction.name &&
             !faction.waiting &&
+            // Hack. For some reason a lot of people react to digging
+            // with too many cubes by pressing "wait" rather than
+            // fixing the error. This puts the game into a stuck
+            // state: after the "wait" is acted on, the player can't
+            // undo past the wait. Admin intervention is required.
+            !faction.SPADE &&
             state.action_required.some(function (record) {
                 return record.faction == faction.name;
             })) {
@@ -3390,7 +3442,7 @@ function addConvertToMovePicker(picker, faction) {
         }
     });
 
-    type.insert({"top": new Element("option", {"value": "-"}).updateText("-")});
+    type.insert({"top": new Element("option", {"selected": true, "value": "-"}).updateText("-")});
 
     var amount = makeSelectWithOptions(["-"]);
 
@@ -3621,6 +3673,19 @@ function addConnectToMovePicker(picker, faction) {
     return row;
 }
 
+function clearNextGameNotification() {
+    $("next_game").hide();    
+}
+
+function showNextGameNotification() {
+    if (!currentFaction ||
+        currentPlayerShouldMove()) {
+        $("next_game").hide();
+    } else {
+        $("next_game").show();
+    }
+}
+
 function updateInfoTab() {
     var tab = $('info_entry');
     var metadata = state.metadata;
@@ -3638,7 +3703,7 @@ function updateInfoTab() {
     };
 
     {
-        var url = "http://terra.snellman.net/game/" + TM.params.game;
+        var url = "https://" + document.location.host + "/game/" + TM.params.game;
         addRow("Public Link",
                new Element("a", { href: url }).updateText(url));
     }
@@ -3692,9 +3757,9 @@ function updateInfoTab() {
         addRow("Move timer", seconds_to_pretty_time((hours) * 3600));
     } else {
         var hours = state.current_chess_clock_hours;
-        addRow("Chess clock", seconds_to_pretty_time((hours) * 3600)
+        addRow("Chess clock", seconds_to_pretty_time((hours) * 3600, 'hour')
                + " (" + seconds_to_pretty_time((state.metadata.chess_clock_hours_initial) * 3600) +
-               " + " + seconds_to_pretty_time((state.metadata.chess_clock_hours_per_round) * 3600) + " per round), grace period " +
+               " + " + seconds_to_pretty_time((state.metadata.chess_clock_hours_per_round) * 3600, 'hour') + " per round), grace period " +
               seconds_to_pretty_time((state.metadata.chess_clock_grace_period) * 3600))
     }
 
@@ -3748,11 +3813,7 @@ function updateInfoTab() {
     }
 
     if (metadata.map_variant) {
-        var labels = {
-            "95a66999127893f5925a5f591d54f8bcb9a670e6" : "Fire & Ice, Side 1",
-            "be8f6ebf549404d015547152d5f2a1906ae8dd90" : "Fire & Ice, Side 2",
-        };
-        var label = labels[metadata.map_variant] || "Alternate";
+        var label = mapNamesById[metadata.map_variant] || "Alternate";
         addRow("Map",
                new Element("a", {href:"/map/" + metadata.map_variant}).updateText(label));
     }
@@ -3796,6 +3857,8 @@ function draw(n) {
     if (state.history_view > 0) {
         $("root").style.backgroundColor = "#ffeedd";
     }
+
+    showNextGameNotification();
 }
 
 function failed() {
@@ -3844,13 +3907,13 @@ function init(root) {
       <tr> \
         <td> \
           <div id="map-container"> \
-            <canvas id="map" width="800" height="500"> \
+            <canvas id="map" width="1600" height="1000"> \
               Browser not supported. \
             </canvas> \
           </div> \
         <td> \
           <div id="cult-container"> \
-            <canvas id="cults" width="250" height="500"> \
+            <canvas id="cults" width="500" height="1000"> \
               Browser not supported. \
             </canvas> \
           </div> \
@@ -3870,6 +3933,7 @@ function init(root) {
     <pre id="preview_commands"></pre> \
     <div id="error"></div> \
     <div id="action_required"></div> \
+    <div id="next_game"></div> \
     <div id="data_entry"></div> \
     <div id="factions"></div> \
     <table id="ledger"> \

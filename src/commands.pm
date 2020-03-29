@@ -2,7 +2,7 @@ package terra_mystica;
 
 use strict;
 
-use Digest::SHA1 qw(sha1);
+use Digest::SHA qw(sha1);
 use Math::Random::MT;
 
 use Game::Constants;
@@ -252,6 +252,7 @@ sub command_build {
     detect_towns_from $faction, $where;
 
     $game{events}->faction_event($faction, 'build:D', 1);
+    $game{events}->location_event($faction, $where);
 }
 
 sub command_upgrade {
@@ -343,6 +344,8 @@ sub command_send {
 
     gain $faction, $gain;
 
+    $game{events}->faction_event($faction, "send:$cult", 1);
+
     adjust_resource $faction, "P", -1;
 }
 
@@ -418,7 +421,11 @@ sub command_leech {
     my $faction_name = $faction->{name};
     my $ledger = $game{ledger};
 
-    my $actual_pw = gain_power $faction, $pw;
+    my $actual_pw = $pw;
+    if ($actual_pw > $faction->{VP}) {
+        $actual_pw = $faction->{VP} + 1;
+    }
+    $actual_pw = gain_power $faction, $actual_pw;
     my $vp = $actual_pw - 1;
 
     my $found_leech_record = 0;
@@ -1047,6 +1054,7 @@ sub add_final_scoring {
         die "Unknown final scoring type: $scoring\n";
     }
     $game{ledger}->add_comment("Added final scoring tile: $scoring");
+    $game{events}->global_event("scoring-$scoring", 1);
 }
 
 sub add_faction_variant {
@@ -1300,6 +1308,8 @@ sub command {
         $ledger->start_new_row($faction);
         $game{ledger}->add_command("setup");
         $ledger->finish_row();
+
+        $game{events}->faction_event($faction, "vp", $faction->{VP});
     } elsif ($command =~ /delete (\w+)$/i) {
         my $name = uc $1;
 
@@ -1369,11 +1379,13 @@ sub command {
             fire-and-ice-factions/volcano
             email-notify
             loose-adjust-resource
+            loose-cultist-ordering
             loose-dig
             loose-engineer-bridge
             loose-lose-cult
             loose-multi-spade
             loose-bridge-adjacency 
+            loose-done
             maintain-player-order
             manual-fav5
             shapeshifter-fix-playtest-v1
@@ -1422,8 +1434,15 @@ sub command {
     } elsif ($command =~ /^wait$/i) {
         ($assert_faction->())->{waiting} = 1;
     } elsif ($command =~ /^done$/i) {
-        ($assert_faction->())->{allowed_sub_actions} = {};
-        ($assert_faction->())->{allowed_actions} = 0;
+        my $faction = $assert_faction->();
+        if ($game{options}{'loose-done'}) {
+            $faction->{allowed_actions} = 0;
+        } else {
+            if ($faction->{allowed_actions} != 0) {
+                die "$faction->{name} must take an action\n";
+            }
+        }
+        $faction->{allowed_sub_actions} = {};
     } elsif ($command =~ /^pick-color (\w+)$/i) {
         my $faction = $assert_faction->();
         if (!$faction->{PICK_COLOR}) {

@@ -9,7 +9,7 @@ use Exporter::Easy (EXPORT => [ 'save',
                                 'verify_and_save',
                                 'evaluate_and_save' ]);
 
-use Digest::SHA1 qw(sha1_hex);
+use Digest::SHA qw(sha1_hex);
 
 use DB::Game;
 use DB::IndexGame;
@@ -102,6 +102,11 @@ sub create_game {
         push @options, "map $map_variant\n";
     }
 
+    my $unranked = 1;
+    if ($map_variant =~ /^(|95a66999127893f5925a5f591d54f8bcb9a670e6|be8f6ebf549404d015547152d5f2a1906ae8dd90|fdb13a13cd48b7a3c3525f27e4628ff6905aa5b1|91645cdb135773c2a7a50e5ca9cb18af54c664c4|2afadc63f4d81e850b7c16fb21a1dcd29658c392)$/) {
+        $unranked = 0
+    }
+
     my $content = <<EOF;
 # Default game options
  option strict-leech
@@ -117,9 +122,10 @@ EOF
     my $write_id = "${id}_${hash}";
     
     $dbh->do(
-        'insert into game (id, write_id, finished, round, player_count, wanted_player_count, needs_indexing, admin_user) values  (?, ?, false, 0, ?, ?, false, ?)',
+        'insert into game (id, write_id, finished, round, player_count, wanted_player_count, needs_indexing, admin_user, exclude_from_stats) values  (?, ?, false, 0, ?, ?, false, ?, ?)',
         {},
-        $id, $write_id, scalar @{$players}, $player_count, $admin_user);
+        $id, $write_id, scalar @{$players}, $player_count, $admin_user,
+        $unranked);
 
     my $i = 0;
     for my $player (@{$players}) {

@@ -25,7 +25,7 @@ sub faction_vp_error_by_map {
         my $res = shift;
         return $res->{base_map} &&
             $res->{base_map} eq $map;
-    };
+    },  {include_unranked => 1 };
 
     my %diffs = ();
     my %counts = ();
@@ -39,6 +39,7 @@ sub faction_vp_error_by_map {
         my $a_faction = $record->{a}{faction};
         my $b_faction = $record->{b}{faction};
 
+        next if $record->{a}{dropped} or $record->{b}{dropped};
         next if !$a_elo or !$b_elo;
 
         my $d_vp = $a_vp - $b_vp;
@@ -60,7 +61,7 @@ sub faction_vp_error_by_map {
         ($_, {
             count => $count,
             mean => $stat->mean(),
-            sterr => $stat->standard_deviation() / sqrt($count / 2.0),
+            sterr => $stat->standard_deviation() / sqrt($count),
          });
     } keys %diffs;
 

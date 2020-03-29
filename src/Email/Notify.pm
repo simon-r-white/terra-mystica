@@ -10,8 +10,9 @@ use Exporter::Easy (EXPORT => [ 'notify_after_move',
 use DB::EditLink;
 use Game::Constants;
 use Net::SMTP;
+use Util::SiteConfig;
 
-my $domain = "http://terra.snellman.net";
+my $domain = "https://$config{domain}";
 
 sub notify_by_email {
     my ($game, $email, $subject, $body) = @_;
@@ -20,13 +21,13 @@ sub notify_by_email {
 
     my $smtp = Net::SMTP->new('localhost', ( Debug => 0 ));
 
-    $smtp->mail("www-data\@terra.snellman.net");
+    $smtp->mail("www-data\@$config{email_domain}");
     if (!$smtp->to($email)) {
         print STDERR "Invalid email address $email\n";
     } else {
         $smtp->data();
         $smtp->datasend("To: $email\n");
-        $smtp->datasend("From: TM Game Notification <noreply+notify-game-$game->{name}\@terra.snellman.net>\n");
+        $smtp->datasend("From: TM Game Notification <noreply+notify-game-$game->{name}\@$config{email_domain}>\n");
         $smtp->datasend("Subject: $subject\n");
         $smtp->datasend("\n");
         $smtp->datasend("$body\n");
@@ -125,7 +126,7 @@ sub notification_text_for_game_start {
 
     my $subject = "Terra Mystica PBEM ($game->{name}) - game started";
     my $body = "
-Game $game->{name} has been start with the following players:
+Game $game->{name} has been started with the following players:
 
 $order
 

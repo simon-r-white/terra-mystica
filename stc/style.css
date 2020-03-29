@@ -150,20 +150,28 @@ table {
 canvas#map {
     border-style: none;
     border-width: 1px;
+    height: 500px;
+    width: 800px;
 }
 canvas#cults {
     border-style: none;
     border-width: 1px;
+    height: 500px;
+    width: 250px;
 }
 
 canvas.action {
     float: left;
+    height: 85px;
+    width: 50px;
 }
 
 canvas.colorcycle {
     float: left;
     margin: 0px;
     padding: 6px;
+    width: 90px;
+    height: 80px;
 }
 
 div#error {
@@ -188,6 +196,20 @@ div#action_required {
     border-style: solid;
     border-width: 1px;
     max-width: 1045px;
+}
+
+div#next_game {
+    background-color: #eec;
+    margin-top: 10px;
+    margin-bottom: 10px;
+    padding: 5px;
+    border-style: solid;
+    border-width: 1px;
+    max-width: 1045px;
+}
+
+div#next_game:empty {
+    display: none;
 }
 
 table.income-table {
@@ -638,6 +660,14 @@ pre.example {
     }
 
     div#action_required button {
+        font-size: 100%;
+    }
+
+    div#next_game {
+        font-size: 300%;
+    }
+
+    div#next_game button {
         font-size: 100%;
     }
 

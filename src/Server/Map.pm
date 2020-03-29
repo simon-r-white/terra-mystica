@@ -2,7 +2,7 @@ use strict;
 
 package Server::Map;
 
-use Digest::SHA1 qw(sha1_hex);
+use Digest::SHA qw(sha1_hex);
 use Moose;
 use Method::Signatures::Simple;
 
@@ -11,10 +11,12 @@ extends 'Server::Server';
 use Analyze::EloVpPredictor;
 use DB::Connection qw(get_db_connection);
 use DB::Game;
+use Game::Constants;
 use map;
 use Server::Security;
 use Server::Session;
 use tracker;
+use Util::SiteConfig;
 
 has 'mode' => (is => 'ro', required => 1);
 
@@ -112,7 +114,7 @@ func map_exists($dbh, $id) {
 }
 
 func save($dbh, $mapdata, $res, $username) {
-    if ($username ne 'jsnell' and $username ne 'nan') {
+    if ($username ne $config{site_admin_username} and $username ne 'nan') {
         die "Sorry, creating new maps isn't allowed\n"
     }
 
@@ -129,7 +131,7 @@ func save($dbh, $mapdata, $res, $username) {
 }
 
 func view($dbh, $id, $res, $map_only) {
-    my ($map_str) = $dbh->selectrow_array("select terrain from map_variant where id=?", {}, $id);
+    my ($map_str, $vp_variant) = $dbh->selectrow_array("select terrain, vp_variant from map_variant where id=?", {}, $id);
     my $base_map = [ split /\s+/, $map_str ];
     my $map = terra_mystica::setup_map $base_map;
 
@@ -137,14 +139,24 @@ func view($dbh, $id, $res, $map_only) {
     $res->{'mapdata'} = convert_to_lodev($map_str);
     $res->{'mapid'} = $id;
 
+    if ($id ne '224736500d20520f195970eb0fd4c41df040c08c' and
+        $id ne '54919e13090127079e7cc3540ad0065311f2ecd7' and 
+        $id ne '2afadc63f4d81e850b7c16fb21a1dcd29658c392') {
+        $map_only = 1;
+    }
+    
     if (!$map_only) {
-        my $game_ids = $dbh->selectall_arrayref("select id, round, finished, array (select faction || ' ' || vp from game_role where game=game.id order by vp desc) as factions from game where base_map=? and not aborted order by finished, round, id",
+        my $game_ids = $dbh->selectall_arrayref("select id, round, finished, array (select faction || ' ' || vp from game_role where game=game.id order by vp desc) as factions from game where base_map=? and player_count > 2 and not aborted order by finished, round, id",
                                                 { Slice => {} },
                                                 $id);
 
         $res->{'games'} = $game_ids;
 
         $res->{'vpstats'} = faction_vp_error_by_map $dbh, $id;
+    }
+
+    if ($vp_variant) {
+        $res->{vp_setup} = $Game::Constants::vp_setups{$vp_variant};
     }
 }
 

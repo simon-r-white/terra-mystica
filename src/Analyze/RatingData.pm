@@ -7,8 +7,15 @@ use strict;
 
 use DB::Game;
 
+sub faction_key {
+    my ($faction, $map) = @_;
+    $map //= '126fe960806d587c78546b30f1a90853b1ada468';
+
+    return "$faction $map";
+}
+
 sub handle_game {
-    my ($res, $output, $players, $factions) = @_;
+    my ($res, $output, $players, $factions, $maps) = @_;
 
     my $faction_count = keys %{$res->{factions}};
     return if $faction_count < 3;
@@ -78,7 +85,8 @@ sub handle_game {
         $f->{id_hash} //= 'unknown';
         $f->{username} //= "unregistered-$f->{id_hash}";
         # $f->{faction} .= "_$faction_count";
-        $factions->{$f->{faction}}{games}++;
+        $f->{fkey} = faction_key $f->{faction}, $f->{base_map};
+        $factions->{$f->{fkey}}{games}++;
         $players->{$f->{id_hash}}{username} = $f->{username};
         $players->{$f->{id_hash}}{games}++;
     }
@@ -91,10 +99,23 @@ sub handle_game {
             next if $f1->{id_hash} eq 'unknown';
             next if $f2->{id_hash} eq 'unknown';
             my $record = {
-                a => { username => $f1->{username}, id_hash => $f1->{id_hash}, faction => $f1->{faction}, vp => $f1->{vp}, dropped => $f1->{dropped} },
-                b => { username => $f2->{username}, id_hash => $f2->{id_hash}, faction => $f2->{faction}, vp => $f2->{vp}, dropped => $f2->{dropped}},
+                a => {
+                    username => $f1->{username},
+                    id_hash => $f1->{id_hash},
+                    faction => $f1->{faction},
+                    fkey => $f1->{fkey},
+                    vp => $f1->{vp},
+                    dropped => $f1->{dropped}
+                },
+                b => {
+                    username => $f2->{username},
+                    id_hash => $f2->{id_hash},
+                    faction => $f2->{faction},
+                    fkey => $f2->{fkey},
+                    vp => $f2->{vp},
+                    dropped => $f2->{dropped}
+                },
                 last_update => $res->{last_update},
-                base_map => $f1->{base_map},
                 id => $res->{id},
             };
             push @{$output}, $record;
@@ -103,14 +124,20 @@ sub handle_game {
 }
 
 sub read_rating_data {
-    my ($dbh, $filter) = @_;
+    my ($dbh, $filter, $params) = @_;
     my @output = ();
     my %players = ();
     my %factions = ();
 
-    my %results = get_finished_game_results $dbh, '';
+    my %results = get_finished_game_results $dbh, '', %{$params};
     my %games = ();
     my %faction_count = ();
+    my @exclude_factions = qw(riverwalkers
+                              riverwalkers_v4
+                              shapeshifters
+                              shapeshifters_v2
+                              shapeshifters_v3
+                              shapeshifters_v4);
 
     for (@{$results{results}}) {
         next if $filter and !$filter->($_);
@@ -130,6 +157,7 @@ sub read_rating_data {
         $games{$_->{game}}{factions}{$_->{faction}} = $_;
         $games{$_->{game}}{id} = $_->{game};
         $games{$_->{game}}{last_update} = $_->{last_update};
+        $games{$_->{game}}{base_map} = $_->{base_map};
         $faction_count{$_->{faction}}++;
     }
 
@@ -142,15 +170,23 @@ sub read_rating_data {
         #         $ok = 0 if $faction_count{$_} < 50;
         #     }
         # }
+        for my $f (@exclude_factions) {
+            if (exists $_->{factions}{$f}) {
+                $ok = 0;
+            }
+        }
 
         if ($ok) {
             handle_game $_, \@output, \%players, \%factions;
+        } else {
+            delete $games{$_->{id}};
         }
     }
 
     return {
         players => \%players,
         factions => \%factions,
+        games => \%games,
         results => \@output 
     };
 }
